@@ -116,3 +116,92 @@ update_memory la actualiza al finalizar cada sesión. Guarda fecha, pedido origi
 Si el subagente explorer detectó arquitectura del repo, se guarda.
 
 La inicialización final deja la memoria temporal lista para la sesión (task_state) y la memoria persistente cargada desde el disco (project_memory). 
+
+**Celda 9**:
+
+Esta se presenta como la celda más compleja dado que orquesta:
+
+* manejo de contexto largo
+* resumen automático del historial
+* detección de loops
+* ejecución de herramientas con guardrails
+* el inner loop que gobierna a cada sub-agente
+
+En primer lugar se define cómo se cuentan los tokens y el máximo de tokenns permitido antes de resumir.
+En caso de llegar al límite no se quedará sin contexto porque resume. 
+count_tokens(messages) ceunta los tokens del historial para decidir si hay que resumir o no. 
+summarize_history(messages)detecta si el historial es demasiado largo, conserva el sistem prompt original y los útlimos 4 mensjaes para lograr continuidad. El
+resto lo resume. Con un mensaje que contiene el resumen reemplaza todo el historial viejo. Evita pérdida de contexto al mismo tiempo que no gasta tokens. 
+detect_loop() detecta si el agente está repitiendo la misma acción sin generar un avance efectivo. 
+Construye una calve "tool_name:args" y procede abuscar cuantas veces aparece en state["progress"]. Si lo enceuntra 2 o más veces --> se formó un loop. 
+
+Cada subagente corre el inner_loop_with_guards(). CAda vuelta del loop es una acción del subagente. Si el contexto creciera demasiado: se resume, conserva lo iportante evitando 
+overflow en el modelo. El modelo esquien decide si responde con texto o llamando a una tool. Si responde SIN tool, finaliza el subagente. 
+Si no, se agrega el mensaje con tool_calls al historial y procesa cada tool call. También detecta formación de bucles. 
+
+* guardrails del sistema
+* guardrails del YAML
+* permisos de lectura/escritura
+* aprobación de comandos peligrosos
+
+Tool permitida --> ejecuta
+Tool bloqueada --> devuevle mensaje de error
+
+Agega el resultado al historial. 
+
+**Celda 10**:
+
+Se toma todo lo construído previamente y se convierte en un agente completo que analiza un repo de React completo. 
+Se encarga literalmente de todo:
+
+* clona el repo
+* carga memoria previa
+* crea el estado de la sesión
+* inicia trazas en Langfuse
+* ejecuta los subagentes en orden
+* actualiza memoria persistente
+* imprime un reporte final
+* Manejo de errores y flush de langfuse
+
+**Celda 11**:
+
+Aquí se definen las herramientas reales que el agente puede ejecutar cuadno el modelo hace una tool call. 
+Se podrían ver como las "manos" del agente: 
+![img.png](img.png)
+
+**Celda 12**:
+
+No ejecuta nada por si sola sino que define el catálofo de herrameintas que el agente puede usar. Se trata de la interfaz pública
+que el LLM ve y puede llamar.
+TOOLS_SCHEMA es lo que el LLM ve meintras que TOOLS_MAP es lo que Pyhton ejecuta. DESTRUCTIVE_TOOLS son las peligrosas. 
+
+Se encaja en el proceso según el siguiente ciclo:
+
+![img_1.png](img_1.png)
+
+**Celda 13**:
+
+Crea un archivo de guardrails del sistema independiente del YAML que se usó antes. Defino los que el agente usa en 
+validate_tool_call antes de aplicar las reglas YAML. 
+
+**Celda 14**:
+
+Consiste en tests de los guardrails, comprieba que funcionan en escenarios peligrosos. 
+
+**Celda 15**:
+Carga la configuración de los guardrails. 
+
+**Celda 16**:
+
+Agente interactivo completo con el cual puedo interactuar por consola.
+Es un agente genérico de código.
+
+1) Prompt: da personalidad y reglas del agente
+2) Se ejecutan herramientas con guardrails y supervisión. 
+3) razonamiento + tool calling
+4) modo plan
+5) loop externo: presenta un chat interactivo que se inicializa, aporta comandos especiales, chequea el plan, etc.
+
+**Celda 17**:
+Agente, analizá este repo de React y generá un reporte completo de arquitectura.
+Ejecuta todo el pipeline construído. 
