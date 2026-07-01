@@ -76,3 +76,43 @@ Resumiendo, implementa el motor rag en memoria.
 **Celda 8**:
 
 Aquí se desarrolla la capa de memoria del agente y es calve para que el sistema tenga persistencia entre sesiones y estado compartido dentro de una misma sesión.
+El task_state es una memoria temporal que sólo vive durante la sesión actual. Es el estado compartido entre subagentes durante una única ejecución del agente. 
+No se guarda en disco sino que se peirde al terminar la sesión. Constituye un diario de trabajo de la sesión actual. 
+
+* Guarda el pedido original del usuario.
+* Registra qué subagentes hicieron qué.
+* Guarda qué archivos se modificaron.
+* Guarda qué fuentes se consultaron (RAG o web).
+* Guarda observaciones internas del agente.
+* Guarda qué chunks del RAG se usaron.
+
+log_progress se encarga del logging interno del agente. Sirve para:
+
+* registrar pasos del agente
+* mostrar trazas en consola
+* dejar evidencia de qué hizo cada subagente
+
+tareas que pueden ayudar al hacer un debugging o reconstruir la sesión. 
+
+project_memory es la memoria persistente entre sesiones. "project_memory.json" sí se guarda en disco. Es una memoria a largo plazo del proyecto donde
+el agente puede recordar sesiones anteriores, decisiones arquitectónicas, archivos importantes, dependencias del proyecto, convenciones de estilo y bugs investigados.
+El contenido:
+
+{
+    "sessions": [],
+    "architecture": {},
+    "key_files": [],
+    "dependencies": {},
+    "conventions": [],
+    "decisions": [],
+    "bugs_investigated": []
+}
+ Permite la conitnuidad entre ejecuciones. 
+
+load_memory carga la memoria persistente. Abre el archivo, lo parsea y devuelve. Si no existe, crea una memoria nueva vacía.
+
+save_memory guarda la memoria en disco, permitiendo que el agente recuerde entre sesiones. 
+update_memory la actualiza al finalizar cada sesión. Guarda fecha, pedido original, repo trabajado, archivos modificados, observaciones y feuntes consultadas.
+Si el subagente explorer detectó arquitectura del repo, se guarda.
+
+La inicialización final deja la memoria temporal lista para la sesión (task_state) y la memoria persistente cargada desde el disco (project_memory). 
