@@ -92,7 +92,7 @@ supervision: si es True, pide confirmación (s/n) antes de ejecutar tools destru
 
 ### Output de cada corrida:
 ARCHITECTURE_REPORT.md dentro del repo clonado, con el reporte de arquitectura producido por el Implementer.
-Traza en Langfuse (https://cloud.langfuse.com, proyecto asociado a tus keys) con un span por subagente — ahí se ven prompts, tool calls, tokens y latencia de la ejecución.
+Traza en Langfuse (https://cloud.langfuse.com, proyecto asociado a las keys) con un span por subagente — ahí se ven prompts, tool calls, tokens y latencia de la ejecución.
 Actualización de project_memory.json con un resumen de la sesión y la arquitectura detectada del repo.
 Resumen en consola al final, con archivos modificados, fuentes consultadas, cantidad de chunks de RAG usados y el veredicto del Reviewer (APROBADO/RECHAZADO).
 
