@@ -167,7 +167,7 @@ Se encarga literalmente de todo:
 
 Aquí se definen las herramientas reales que el agente puede ejecutar cuadno el modelo hace una tool call. 
 Se podrían ver como las "manos" del agente: 
-![img.png](../img.png)
+![img.png](../../img.png)
 
 **Celda 12**:
 
@@ -177,7 +177,7 @@ TOOLS_SCHEMA es lo que el LLM ve meintras que TOOLS_MAP es lo que Pyhton ejecuta
 
 Se encaja en el proceso según el siguiente ciclo:
 
-![img_1.png](../img_1.png)
+![img_1.png](../../img_1.png)
 
 **Celda 13**:
 
