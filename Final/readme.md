@@ -205,3 +205,19 @@ Es un agente genérico de código.
 **Celda 17**:
 Agente, analizá este repo de React y generá un reporte completo de arquitectura.
 Ejecuta todo el pipeline construído. 
+
+**Disclaimer**‼️
+
+Siguiendo los requerimientos de la consigna, state es el mismo objeto compartido entre el agente y **TODOS** los subagentes. 
+Por tanto, cuando el researcher intenta list_files sobre una carpeta que fuera lsitada múltiples veces por Explorer, hereda el conteo
+y queda bloqueado el intento aunque no haya iterado sobre sí mismo. 
+El detector de loops opera sobre el historial global de la tarea, no por subagente. 
+Para solucionarlo se puede optar por otra lógica de comparacion, pasando de:
+
+f"{tool_name}:{json.dumps(args, sort_keys=True)}"
+
+a:
+
+f"{subagent_name}:{tool_name}:{json.dumps(args, sort_keys=True)}"
+
+De este modo, aunque todos continuarán operando sober la misma lista, cada subagente obtendrá información de la actividad propia. 
