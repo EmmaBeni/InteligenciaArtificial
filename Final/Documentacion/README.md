@@ -16,15 +16,15 @@ Sin embargo, todo corre en Google Colab por lo que no es necesario hacer isntala
 
 ## Instalación
 
-1) Aceder a Agent_entregable_final.ipynb en Google Colab
-2) Se cargan las credenciales como Secrets de Colab:
+1) Acceder a [Agente_final.ipynb](file:///C:/Users/laris/Downloads/InteligenciaArtificial/Final/Agente_final.ipynb) en Google Colab (o entorno local Jupyter).
+2) Se cargan las credenciales como Secrets de Colab (o variables de entorno si se corre en local):
 
-    - OPEN_API_KEY
-    - LANGFUSE_PK
-    - LANGFUSE_SK
+    - `OPENAI_API_KEY`
+    - `LANGFUSE_PK`
+    - `LANGFUSE_SK`
 
-    Se activa el toggle "Notebook access" para que el notebook pueda leerlos. Caso contrario, los pedirá como input al ejecutar el código.
-3) Run all. La primera celda se encargará de instalar las dependencias necesarias. 
+    Si usas Colab, activa el toggle "Notebook access" para que el notebook pueda leerlos. Caso contrario, se solicitarán por consola al ejecutar.
+3) Run all. La primera celda se encargará de instalar las dependencias necesarias (OpenAI, ChromaDB, Langfuse, PyYAML, Tiktoken, etc.). 
 
 ## Configuración
 
@@ -79,26 +79,37 @@ Se almacena en project_memory.json dentro del workspace. Al correr el notebook v
 el agente avisará que ya fue analizado antes y reutilizará ese contexto. Es necesario borrar el archivo para resetear el contexto.
 
 ### Ejecución
-Una vez corridas todas las celdas de setup, se ejecuta el agente con:
+Una vez corridas todas las celdas de setup, se inicia el bucle de chat interactivo del agente principal ejecutando:
 
-pythonREPO_URL = "https://github.com/facebook/create-react-app"
-state = run_main_agent(repo_url=REPO_URL, supervision=False)
+```python
+run_agent()
+```
 
-### Parámetros:
-repo_url: URL de un repositorio público de GitHub. El agente lo clona (--depth 1, trae sólo el útlimo commit de cada archivo en el árbol) dentro del workspace.
-repo_path: alternativa a repo_url si el repo ya está clonado localmente o en el workspace.
-supervision: si es True, pide confirmación (s/n) antes de ejecutar tools destructivas (write_file, run_command). En False, corre de punta a punta sin pausas.
+Esto arrancará una interfaz interactiva de consola (CLI) donde el agente estará esperando instrucciones del usuario.
 
+### Comandos de control disponibles en la consola:
+Al ingresar un prompt, puedes utilizar comandos especiales para configurar o arrancar la ejecución:
+- `/help` o `/commands`: Muestra los comandos disponibles y la ayuda.
+- `/analyze`: Ejecuta el pipeline completo de subagentes (Explorer → Researcher → Implementer → Tester → Reviewer) para analizar el repositorio.
+- `/plan`: Activa o desactiva la generación interactiva del plan de pasos a seguir (`ON` / `OFF`) antes de que el agente ejecute herramientas.
+- `/supervision`: Activa o desactiva la supervisión humana (`ON` / `OFF`) sobre las herramientas destructivas (`write_file`, `run_command`).
+- `/config` o `/status`: Muestra el estado de la configuración y variables activas.
+- `/reset`: Limpia el historial de mensajes de la conversación.
+- `/exit`: Finaliza la sesión y sale de la consola interactiva.
 
-### Output de cada corrida:
-ARCHITECTURE_REPORT.md dentro del repo clonado, con el reporte de arquitectura producido por el Implementer.
-Traza en Langfuse (https://cloud.langfuse.com, proyecto asociado a las keys) con un span por subagente — ahí se ven prompts, tool calls, tokens y latencia de la ejecución.
-Actualización de project_memory.json con un resumen de la sesión y la arquitectura detectada del repo.
-Resumen en consola al final, con archivos modificados, fuentes consultadas, cantidad de chunks de RAG usados y el veredicto del Reviewer (APROBADO/RECHAZADO).
+### Parámetros configurables en el código:
+- **`REPO_URL`**: URL del repositorio público en GitHub a clonar y analizar (por defecto configurado como `"https://github.com/emmabeni27/pickndrive-ia"`).
+- **`supervision`**: Controla si el agente requiere confirmación interactiva (`s/n`) para ejecutar operaciones destructivas. Se puede cambiar dinámicamente mediante el comando `/supervision`.
+- **`plan_mode`**: Si está activo, el agente presentará un plan detallado antes de proceder a usar herramientas y esperará la confirmación del usuario (`s/n/modificar`).
 
+### Output de cada corrida de análisis:
+- **`ARCHITECTURE_REPORT.md`**: Creado dentro de la carpeta del repositorio clonado, con el informe de arquitectura detallado redactado por el subagente Implementer.
+- **Traza en Langfuse**: Visible en [cloud.langfuse.com](https://cloud.langfuse.com) bajo el nombre de traza `react-architecture-agent-chat` (contiene la observabilidad del chat global y spans detallados por subagente).
+- **Actualización de `project_memory.json`**: Guarda el historial de resúmenes de las sesiones del repositorio trabajado y los datos de arquitectura.
+- **Resumen en consola**: Al finalizar el análisis, el pipeline imprime el estado de la corrida, los archivos modificados y el veredicto del Reviewer (`APROBADO`/`RECHAZADO`).
 
 ### Consultar traza en Langfuse
-cloud.langfuse.com → pestaña "Traces" → buscar la traza react-architecture-agent con la fecha/hora de la corrida en cuestión
+Accede a cloud.langfuse.com → pestaña "Traces" → busca la traza `react-architecture-agent-chat` correspondiente a la corrida realizada.
 
 ### Notas
 El notebook no usa frameworks de orquestación. El harness, el manejo de tools y la coordinación de subagentes están implementados a mano.

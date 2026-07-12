@@ -1,227 +1,104 @@
-A continuación dejo una explicación del código celda a celda. 
+A continuación se presenta una explicación detallada del código celda por celda de [Agente_final.ipynb](file:///C:/Users/laris/Downloads/InteligenciaArtificial/Final/Agente_final.ipynb).
 
 **Celda 1**:
-
-En primer lugar se importan las librerías y módulos que se usarán a lo largo del proyecto. 
-Se obtienen las API keys. La de ChatGPT proveída por la cátedra así como las de Langfuse. En Colab intentará leerlas desde userdata. 
-Se crea al cliente de OpenAI para poder llamar modelos, en este caso, gpt-5-nano. A continuación se definen los nombres de modelos que el agente usará.
-Uno es para generación de texto y el otro para embeddings vectoriales.
-En el directorio /content/workspace donde trabajará (lectura y escritura) el agente. Aquí se generan archivos, logs y resultados. 
-Finalmente los mensajes confirman que todo está inicializado. 
+Instalación de las dependencias requeridas en el entorno (generalmente Google Colab o Jupyter): `openai` para los modelos GPT, `chromadb` como base de datos vectorial persistente, `langfuse` (versión < 3 para soporte de `.trace()`), `pyyaml`, `tiktoken` y `requests`.
 
 **Celda 2**:
-
-Aquí tiene lugrar la inicialización de la conexión a Langfuse. La importación trae creación de traces, creación de spans, logging de input/output, 
-métricas de latencia, almacenamiento de prompts y dashboards de ejecución. 
-Luego con la inicialización del cliente se utilizan las claves. Se utiliza una instancia cloud en lugar de una self-hosted. 
-Resumiendo, se conecta el agente con el sistema de observabilidad. 
-Posterior a la creación del cliente hace auth_check() para validar las credenciales. En el caso en que fallara, se muestra el tipo de error, el mensaje y los primeros caracteres de cada clave. 
-
-Langfuse es una plataforma de ingeniería de IA de código abierto diseñada para monitorizar, evaluar y optimizar aplicaciones que utilizan LLMs. 
-Funciona como una "caja negra" que registra y analiza todo lo que ocurre dentro de tus agentes o chatbots de IA en tiempo real.
+Importación de módulos estándar (`os`, `json`, `subprocess`, `requests`, `yaml`, `re`, `hashlib`), configuración del cliente `OpenAI` (leyendo las credenciales desde `userdata` de Colab o por input por consola si no están cargadas), definición de los modelos a utilizar (`MODEL = "gpt-5-nano"` y `EMBED_MODEL = "text-embedding-3-small"`) y establecimiento del directorio de trabajo (`/content/workspace`).
 
 **Celda 3**:
-
-Esta se ocupa de crear una rchivo de configuración para el agente definiendo qué puede leer, escribir o ejecutar dentro del workspace. 
-El YAML define ante todo el directorio en el que estará trabajando. Se niega la lectura de los archivos más sensibles. 
-No puede modificar el agente archivos de workflows lo lockfiles (controla acceso arecursos compartidos). Se bloquean además los comandos peligrosos. 
-Otros se pueden ejecutar pero requiriendo aprobación previa. _#Revisar qué pasa con los GUARDRAILS
-Postrera configuración del agent.config.yaml
+Inicialización de la conexión con Langfuse Cloud mediante `Langfuse(public_key, secret_key, host)`. Realiza un chequeo de autenticación (`lf.auth_check()`) para asegurar el correcto flujo de observabilidad y trazabilidad de la ejecución del agente.
 
 **Celda 4**:
-
-Se combinan guardrails internos y políticas de YAML para decidir si una acción está permitida o no. 
-En primer lugar se carga la configutación del YAML y abre agent.config.yaml. Se paresea y queda disponible como un diccionario e Python. El agente lo usará para saber que está permitido y qué no. 
-La funcionón matches_any sirve para comparar rutas o comandos según patrones. 
-Mientras, la función validate_tool_call decide si el agente puede ejecutar una herramienta o no. 
-Los guardrails pertenecen al sistema del agente. Son reglas itnernas del agente que no dependen del YAML. No se pueden desactivar, lo que hacen es proteger el entorno del agente. Las políticas YAML configurables por el usuario
-protegen el proyecto y workspace. 
+Definición de las fuentes de documentación de React (`REACT_DOCS_SOURCES`) descargadas directamente desde los repositorios de GitHub en formato `.md` crudo. Se define la función `fetch_doc(url)` para realizar la petición HTTP y descargar la documentación en memoria.
 
 **Celda 5**:
-
-En primer lugar se define una lista de URLs de docuementación de React. Se trata de archivos .md alojados en GitHub. 
-fetch_doc hace una petición HTTP sin tocar el filsystemlocal ni ejecutar comandos o usar herrameintas del agente. 
-Descarga cada documetno y lo guarda en una lista de Python para que quede en memoria. No se escribe al disco.Los muestra por consola. 
+Definición de la función de fraccionamiento de texto (`chunk_text`) que divide el texto markdown en bloques de palabras (tamaño por defecto de 500 palabras y solapamiento de 50 palabras) y genera un hash MD5 único como identificador para cada fragmento. Asimismo, se define la función `get_embedding(text)` que realiza la llamada a la API de OpenAI para obtener la representación vectorial de cada bloque.
 
 **Celda 6**:
-
-chunk_text divide el texto en pedazos, genera un id con hashlib.md5 y arma diccionarios con metadata. Todo ocurre en memoria sin leer ni escribir archivos. 
-get_embedding llama a la API de OpenAI. 
-Más tarde el loop genera chunks y embeddings. Otra vez se ejecuta todo en memoria. 
+Inicialización de la base de datos vectorial persistente **ChromaDB** (`chromadb.PersistentClient`) en el workspace (`/content/workspace/chroma_db`). Crea la colección `"react_docs"`. Si la colección está vacía (`collection.count() == 0`), indexa los bloques de documentación de React generando y subiendo sus embeddings. Si la colección ya existe, la reutiliza evitando costos adicionales de API. También define la función `rag_search(query, n_results)` para recuperar de manera semántica los fragmentos más relevantes.
 
 **Celda 7**:
-Es el ❤️ del RAG (conecta al LLM con fuentes de información externas).
-Indexa los chunks: las lsitas rag_texts, rag_embeddings y rag_metadata son listas paralelas que conforman una DB en memoria. 
-Generación de embeddings: tomando cada chunk, enero su embedding con OpenAI y lo guardo en memoria. Esto convierte la documetnación en representaciones vectoriales que permiten 
-aplicar una búsqueda semántica. 
-Construcción de la matriz NumPy: optimizaz la búsqueda vectorial usando oepraciones matriciales. 
-cosine_similarity: calcula la similitud entre el embedding del query y todos los embeddings de la DB. Usa producto punto entre los vectores normalizados. 
-rag_search:
-
-1. Se convierte la query en embedding.
-2. Se calcula la similitud con todos los chunks.
-3. Se ordena por score.
-4. Devuelve los mejores.
-
-Cada resultado incluye:
-
-* texto del chunk,
-* título del documento,
-* URL original,
-* score de similitud,
-* etiqueta "source": "RAG"
-
-Resumiendo, implementa el motor rag en memoria.
+Creación física del archivo de configuración `agent.config.yaml` en el workspace. Este archivo define la estructura de permisos y políticas aplicables al agente: rutas de lectura denegadas (archivos secretos, claves, etc.), rutas de escritura denegadas (carpetas de configuración o control de versiones) y comandos del sistema restringidos o que requieren supervisión del usuario.
 
 **Celda 8**:
-
-Aquí se desarrolla la capa de memoria del agente y es calve para que el sistema tenga persistencia entre sesiones y estado compartido dentro de una misma sesión.
-El task_state es una memoria temporal que sólo vive durante la sesión actual. Es el estado compartido entre subagentes durante una única ejecución del agente. 
-No se guarda en disco sino que se peirde al terminar la sesión. Constituye un diario de trabajo de la sesión actual. 
-
-* Guarda el pedido original del usuario.
-* Registra qué subagentes hicieron qué.
-* Guarda qué archivos se modificaron.
-* Guarda qué fuentes se consultaron (RAG o web).
-* Guarda observaciones internas del agente.
-* Guarda qué chunks del RAG se usaron.
-
-log_progress se encarga del logging interno del agente. Sirve para:
-
-* registrar pasos del agente
-* mostrar trazas en consola
-* dejar evidencia de qué hizo cada subagente
-
-tareas que pueden ayudar al hacer un debugging o reconstruir la sesión. 
-
-project_memory es la memoria persistente entre sesiones. "project_memory.json" sí se guarda en disco. Es una memoria a largo plazo del proyecto donde
-el agente puede recordar sesiones anteriores, decisiones arquitectónicas, archivos importantes, dependencias del proyecto, convenciones de estilo y bugs investigados.
-El contenido:
-
-{
-    "sessions": [],
-    "architecture": {},
-    "key_files": [],
-    "dependencies": {},
-    "conventions": [],
-    "decisions": [],
-    "bugs_investigated": []
-}
- Permite la conitnuidad entre ejecuciones. 
-
-load_memory carga la memoria persistente. Abre el archivo, lo parsea y devuelve. Si no existe, crea una memoria nueva vacía.
-
-save_memory guarda la memoria en disco, permitiendo que el agente recuerde entre sesiones. 
-update_memory la actualiza al finalizar cada sesión. Guarda fecha, pedido original, repo trabajado, archivos modificados, observaciones y feuntes consultadas.
-Si el subagente explorer detectó arquitectura del repo, se guarda.
-
-La inicialización final deja la memoria temporal lista para la sesión (task_state) y la memoria persistente cargada desde el disco (project_memory). 
+Manejo de la memoria del agente. Se implementa el estado temporal de la tarea actual (`new_task_state`) en memoria para compartir el progreso, archivos modificados y chunks consultados entre los subagentes. También se define la memoria persistente del proyecto (`load_memory()`, `save_memory()`, `update_memory()`) en el archivo `project_memory.json` para dar continuidad y recordar qué repositorios ya fueron analizados en ejecuciones previas del agente.
 
 **Celda 9**:
-
-Esta se presenta como la celda más compleja dado que orquesta:
-
-* manejo de contexto largo
-* resumen automático del historial
-* detección de loops
-* ejecución de herramientas con guardrails
-* el inner loop que gobierna a cada sub-agente
-
-En primer lugar se define cómo se cuentan los tokens y el máximo de tokenns permitido antes de resumir.
-En caso de llegar al límite no se quedará sin contexto porque resume. 
-count_tokens(messages) ceunta los tokens del historial para decidir si hay que resumir o no. 
-summarize_history(messages)detecta si el historial es demasiado largo, conserva el sistem prompt original y los útlimos 4 mensjaes para lograr continuidad. El
-resto lo resume. Con un mensaje que contiene el resumen reemplaza todo el historial viejo. Evita pérdida de contexto al mismo tiempo que no gasta tokens. 
-detect_loop() detecta si el agente está repitiendo la misma acción sin generar un avance efectivo. 
-Construye una calve "tool_name:args" y procede abuscar cuantas veces aparece en state["progress"]. Si lo enceuntra 2 o más veces --> se formó un loop. 
-
-Cada subagente corre el inner_loop_with_guards(). CAda vuelta del loop es una acción del subagente. Si el contexto creciera demasiado: se resume, conserva lo iportante evitando 
-overflow en el modelo. El modelo esquien decide si responde con texto o llamando a una tool. Si responde SIN tool, finaliza el subagente. 
-Si no, se agrega el mensaje con tool_calls al historial y procesa cada tool call. También detecta formación de bucles. 
-
-* guardrails del sistema
-* guardrails del YAML
-* permisos de lectura/escritura
-* aprobación de comandos peligrosos
-
-Tool permitida --> ejecuta
-Tool bloqueada --> devuevle mensaje de error
-
-Agega el resultado al historial. 
+Control de contexto y loops de ejecución.
+- `count_tokens()`: Mide el consumo de tokens en el historial.
+- `summarize_history()`: Resume el contexto intermedio del historial de chat cuando excede el límite (`MAX_CONTEXT_TOKENS`) para evitar overflow en el modelo.
+- `detect_loop()` y `make_call_key()`: Implementan la detección de bucles infinitos basándose en una clave compuesta que incluye el subagente (`subagent_name:tool_name:args`). Si se repite una acción la cantidad de veces configurada en `threshold`, el agente corta la llamada a la herramienta y busca una estrategia alternativa.
+- `inner_loop_unificado()`: Orquesta el loop principal de interacción LLM-herramientas. Opera en **Modo Simple** (chat directo, sin guards ni resúmenes) y en **Modo con Guards** (para subagentes, aplicando la seguridad y el registro detallado en el estado y Langfuse).
 
 **Celda 10**:
-
-Se toma todo lo construído previamente y se convierte en un agente completo que analiza un repo de React completo. 
-Se encarga literalmente de todo:
-
-* clona el repo
-* carga memoria previa
-* crea el estado de la sesión
-* inicia trazas en Langfuse
-* ejecuta los subagentes en orden
-* actualiza memoria persistente
-* imprime un reporte final
-* Manejo de errores y flush de langfuse
+Definición e inicialización de la lógica para los subagentes especializados mediante `_run_subagent()`. Cada subagente se configura con un prompt de sistema, un objetivo concreto y un span de Langfuse:
+- `run_explorer()`: Analiza la estructura del proyecto y su stack sin modificar archivos.
+- `run_researcher()`: Investiga vulnerabilidades, obsolescencias y dependencias consultando el RAG y web_search.
+- `run_implementer()`: Redacta y escribe el reporte `ARCHITECTURE_REPORT.md` en el repositorio.
+- `run_tester()`: Comprueba la existencia y validez del reporte generado.
+- `run_reviewer()`: Dictamina si el reporte cumple con la solicitud original (APROBADO/RECHAZADO).
 
 **Celda 11**:
-
-Aquí se definen las herramientas reales que el agente puede ejecutar cuadno el modelo hace una tool call. 
-Se podrían ver como las "manos" del agente: 
-![img.png](../../img.png)
+Implementación de `init_repo()`, que se encarga de clonar (o reutilizar) el repositorio git de interés, y del pipeline de subagentes (`subagent_pipeline()`), que coordina la ejecución secuencial de Explorer → Researcher → Implementer → Tester → Reviewer. Al finalizar la corrida exitosa, actualiza la memoria persistente.
 
 **Celda 12**:
+Sistema de registro de herramientas en runtime (Plugins). Implementa el decorador `@register_tool` para registrar dinámicamente herramientas en el objeto `TOOL_REGISTRY` y define las herramientas base que el agente puede usar:
+- `read_file`: Lee archivos.
+- `write_file`: Escribe o sobrescribe archivos (marcada como destructiva).
+- `run_command`: Ejecuta comandos de consola (marcada como destructiva).
+- `list_files`: Lista contenidos de directorios.
+- `web_search`: Realiza búsquedas mediante el modelo LLM.
 
-No ejecuta nada por si sola sino que define el catálofo de herrameintas que el agente puede usar. Se trata de la interfaz pública
-que el LLM ve y puede llamar.
-TOOLS_SCHEMA es lo que el LLM ve meintras que TOOLS_MAP es lo que Pyhton ejecuta. DESTRUCTIVE_TOOLS son las peligrosas. 
+La función `refresh_tools()` reconstruye el esquema de herramientas (`TOOLS_SCHEMA`, `TOOLS_MAP` y `DESTRUCTIVE_TOOLS`) de forma automática.
 
-Se encaja en el proceso según el siguiente ciclo:
-
+![img.png](../../img.png)
 ![img_1.png](../../img_1.png)
 
 **Celda 13**:
-
-Crea un archivo de guardrails del sistema independiente del YAML que se usó antes. Defino los que el agente usa en 
-validate_tool_call antes de aplicar las reglas YAML. 
+Configuración de la política de comandos seguros. Define `ALLOWED_COMMANDS` (comandos de consola no dañinos como `ls`, `dir`, `pwd`, `grep`, `echo`) e implementa la función `is_safe_command(command)`. Si el agente intenta ejecutar un comando que coincide con esta lista y no tiene operadores de encadenamiento de consola, se le permite correr sin necesidad de aprobación humana, mejorando la autonomía del agente para consultas del sistema básicas.
 
 **Celda 14**:
-
-Consiste en tests de los guardrails, comprieba que funcionan en escenarios peligrosos. 
+Generación del archivo de seguridad `guardrails.json` que contiene restricciones críticas a nivel del sistema (directorios permitidos, rutas bloqueadas absolutas como `/etc` y comandos completamente prohibidos).
 
 **Celda 15**:
-Carga la configuración de los guardrails. 
+Función `load_guardrails()` para cargar en memoria las restricciones duras del sistema definidas en `guardrails.json`.
 
 **Celda 16**:
-
-Agente interactivo completo con el cual puedo interactuar por consola.
-Es un agente genérico de código.
-
-1) Prompt: da personalidad y reglas del agente
-2) Se ejecutan herramientas con guardrails y supervisión. 
-3) razonamiento + tool calling
-4) modo plan
-5) loop externo: presenta un chat interactivo que se inicializa, aporta comandos especiales, chequea el plan, etc.
+Carga del YAML y validación de las herramientas mediante `validate_tool_call()`. Esta función es el guardián del sistema: intercepta cada llamada de herramienta propuesta por el modelo y verifica que no acceda a directorios restringidos por los guardrails locales, que cumpla las políticas de lectura/escritura del YAML, y que no use comandos peligrosos bloqueados.
 
 **Celda 17**:
-Agente, analizá este repo de React y generá un reporte completo de arquitectura.
-Ejecuta todo el pipeline construído. 
+Generación programmaticamente del archivo explicativo `ARQUITECTURA.md` directamente en el workspace del proyecto. Este archivo contiene la especificación estática del diseño del sistema, roles de agentes y flujo de datos.
 
-**Disclaimer**‼️
+**Celda 18**:
+Capa de ejecución de herramientas y seguridad interactiva.
+- `execute_tool()`: Valida guardrails, comprueba supervisión interactiva para herramientas destructivas, y atrapa excepciones para que no se propague un crash en la API.
+- `sanitize_messages()`: Red de seguridad extra que elimina pares incompletos de `assistant(tool_calls)` y `tool(response)` en el historial del chat para evitar fallos de petición HTTP.
+- `plan_mode_flow()`: Si está activo, genera una propuesta de plan en pasos detallados mediante el LLM y pide aprobación al usuario por consola (`s/n/modificar`).
 
-Siguiendo los requerimientos de la consigna, state es el mismo objeto compartido entre el agente y **TODOS** los subagentes. 
-Por tanto, cuando el researcher intenta list_files sobre una carpeta que fuera lsitada múltiples veces por Explorer, hereda el conteo
-y queda bloqueado el intento aunque no haya iterado sobre sí mismo. 
-El detector de loops opera sobre el historial global de la tarea, no por subagente. 
-Para solucionarlo se puede optar por otra lógica de comparacion, pasando de:
+**Celda 19**:
+Definición de `run_agent()`. Implementa la interfaz conversacional de consola CLI con el menú interactivo, la inicialización del repositorio remoto (`REPO_URL`) y el control dinámico mediante comandos de usuario como `/exit`, `/reset`, `/plan`, `/supervision`, `/config` y `/analyze`.
 
-f"{tool_name}:{json.dumps(args, sort_keys=True)}"
+**Celda 20**:
+Funciones de pruebas y utilidades para simular entornos restringidos en testing (ejemplo: creación de directorios bloqueados y archivos con permisos completos para evaluar si el agente respeta los límites de chmod).
 
-a:
+**Celda 21**:
+Demostración práctica del sistema de plugins. Registra la herramienta `find_todos` decorada con `@register_tool` y ejecuta `refresh_tools()`, haciéndola disponible en el esquema y mapa del agente en tiempo de ejecución sin haber alterado el núcleo de su código.
 
-f"{subagent_name}:{tool_name}:{json.dumps(args, sort_keys=True)}"
+**Celda 22**:
+Punto de ejecución real del agente interactivo llamando a `run_agent()`.
 
-De este modo, aunque todos continuarán operando sober la misma lista, cada subagente obtendrá información de la actividad propia. 
+**Celda 23**:
+Verificación y lectura en consola de los registros históricos de ejecución guardados en `project_memory.json`.
 
+---
 
-*RAG: técnica de IA que conecta un modelo de lenguaje con fuentes de información externas. Esto evita alucinaciones y utiliza infromación actualizada.
-Si se conecta al agente a documentos internos, se puede personalizar la feunte de información. 
+### Detección de bucles resuelta (Disclaimer actualizado) 
+En versiones previas del agente, la clave utilizada para registrar llamadas a herramientas era global y no distinguía al emisor. Dado que el objeto `state` es compartido por referencia entre todos los subagentes, la ejecución sucesiva de herramientas legítimas similares (ej. que el Explorer y el Researcher listen o lean archivos en secuencia) generaba falsos positivos bloqueando al agente por "bucle detectado".
+
+En esta versión final, la clave generada por `make_call_key` incorpora el nombre del subagente:
+```python
+def make_call_key(subagent_name: str, tool_name: str, args: dict) -> str:
+    return f"{subagent_name}:{tool_name}:{json.dumps(args, sort_keys=True)}"
+```
+De este modo, aunque continúen operando sobre el historial unificado `state["tool_call_log"]`, el detector evalúa individualmente el comportamiento de cada subagente en su fase, resolviendo los falsos positivos y garantizando fluidez en la orquestación.

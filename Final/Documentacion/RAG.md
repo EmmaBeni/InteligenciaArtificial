@@ -25,20 +25,25 @@ Se estableció como límite de seguridad un truncamiento del texto a 8000 caract
 Este modelo se usa tanto para indexar los chunks así como para hacer el embedding de la query de búsqueda (es necesario para que la comparación tenga sentido).
 
 ## Almacenamiento y Búsqueda
-Decidimos recrear el almacenamiento vecotrial en memoria utilizando 3 listas paralelas: rag_texts, rag_embeddings, rag_metadata (título + url), más una matriz numpy (rag_matrix, shape (n_chunks, 1536).
-Se arman a partir de los embeddings. Dado que son unas pocas docenas de chunks, se puede aplicar fuerza bruta en la búsqueda. 
-Devuelve, por defecto, los 3 chunks más similares, cada uno etiquetado con "source": "RAG", más su score de similitud, título y URL de origen.
-Estos resultados son los que consume el Researcher: se agregan a state["rag_chunks_used"] y a state["sources_consulted"], y el texto de los chunks (primeros 400 caracteres de cada uno) se le pasa como contexto extra en el prompt.
+El sistema utiliza **ChromaDB** como base vectorial persistente (`chromadb.PersistentClient`) alojada localmente en `/content/workspace/chroma_db`. 
 
-## Almacenamiento vectorial: numpy en memoria vs. base vectorial dedicada
+El proceso de almacenamiento y búsqueda funciona así:
+1. **Inicialización**: Se inicializa el cliente persistente y se crea (o recupera) la colección `react_docs`.
+2. **Indexado condicional**: Si la colección no contiene documentos (`collection.count() == 0`), se generan los embeddings de los chunks y se indexan en ChromaDB junto a su respectiva metadata (título y URL original). Si ya existen documentos indexados, se omiten la generación y la inserción para ahorrar costos de API y tiempo de cómputo.
+3. **Búsqueda**: La función `rag_search()` calcula el embedding de la consulta del usuario mediante `get_embedding()` y consulta la colección usando `collection.query()`, retornando los 3 chunks más similares.
 
-| Aspecto | Numpy en memoria (elegido) | Base vectorial dedicada (ej. Chroma) |
+Los resultados devueltos incluyen el texto, el título, la URL, la similitud semántica (calculada a partir de la distancia devuelta por Chroma) y la etiqueta `"source": "RAG"`. Estos fragmentos son consumidos por el **Researcher**, que los registra en `state["sources_consulted"]` y los inyecta en su contexto de prompt.
+
+## Almacenamiento vectorial: numpy en memoria vs. base vectorial dedicada (ChromaDB)
+
+| Aspecto | NumPy en memoria (descartado) | Base vectorial dedicada (ChromaDB) (elegido) |
 |---|---|---|
-| **Persistencia** | No persiste entre corridas — se re-embeddean los chunks cada vez que se corre el notebook | Persiste en disco, evita re-embeddear en corridas sucesivas |
-| **Performance a esta escala** | Búsqueda por fuerza bruta, instantánea con ~40-60 chunks | Indexación (HNSW/IVF) pensada para volúmenes mucho mayores; sin ventaja perceptible acá |
-| **Complejidad de setup** | Cero dependencias extra, funciona con lo que ya usa el proyecto (numpy) | Dependencia adicional, con riesgos de compatibilidad de entorno (ej. versión de SQLite en Colab) |
-| **Escalabilidad** | No escala a corpus grandes (miles de documentos) | Pensada para escalar sin degradar tiempos de búsqueda |
-| **Costo en llamadas a la API** | Se re-embeddea todo el corpus en cada sesión | Embeddings calculados una sola vez, reutilizados entre sesiones |
-| **Adecuación al caso de uso** | Corpus fijo y acotado (6 documentos de referencia de React), sin necesidad de updates incrementales ni filtros de metadata complejos | Aporta valor cuando el corpus crece, cambia con frecuencia, o se necesita filtrado avanzado |
+| **Persistencia** | No persiste entre corridas: se re-embeddean los chunks cada vez que se corre el notebook. | Persiste en disco (`/content/workspace/chroma_db`), evitando re-indexar en ejecuciones sucesivas si ya hay datos. |
+| **Performance a esta escala** | Búsqueda por fuerza bruta rápida en memoria (~40-60 chunks). | Indexación optimizada (HNSW); tiempo de respuesta instantáneo e ideal para escalar a futuro. |
+| **Complejidad de setup** | Cero dependencias extra, solo NumPy. | Requiere instalar e importar la biblioteca `chromadb`. |
+| **Escalabilidad** | Limitado. Degradación del rendimiento de búsqueda al crecer el número de documentos. | Totalmente escalable a miles o millones de documentos sin pérdida de rendimiento. |
+| **Costo en llamadas a la API** | Alto en el largo plazo, ya que requiere llamar a la API de embeddings por cada chunk en cada inicio de sesión. | Bajo y controlado: los embeddings se generan una única vez al poblar la base por primera vez. |
+| **Adecuación al caso de uso** | Adecuado solo para pruebas efímeras. | Excelente para mantener una base de conocimiento persistente, permitiendo consultas rápidas y ampliación de documentos sin coste adicional recurrente. |
 
-**Decisión**: se optó por almacenamiento vectorial en memoria (matriz numpy + similitud coseno) dado el volumen acotado y estático del corpus RAG. El mecanismo es funcionalmente equivalente al de una base vectorial dedicada (embeddings + búsqueda por distancia), sin la complejidad ni las dependencias adicionales que no se justifican a esta escala.
+**Decisión**: Se optó por **ChromaDB** como base vectorial persistente debido a que reduce significativamente el número de llamadas a la API de OpenAI al evitar re-generar embeddings en cada ejecución del notebook. Además, sienta una base de desarrollo profesional que permite escalar el corpus de conocimiento sin comprometer el rendimiento.
+

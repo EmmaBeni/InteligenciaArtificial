@@ -13,13 +13,11 @@ Originalmente usamos como prueba:
 ## Objetivo
 Con la arquitectura de Explorer + Researcher + Implementer + Tester + Reviewer el objetivo es:
 
-- Explorer: mapea estructura, stack, convenciones. Analiza el repositorio.
-- Researcher: usa RWAG + web para revisar si las versiones de las dependencias encontradas por 
-Explorer están deprecadas, tienen CVEs conocidos o si hay uan versión más nueva recomendada. Le da propósito
-al uso del RAG.
-- Implementer: redacta el reporte final con las recomendaciones. 
-- Tester: valida que el reporte tenga las secciones mínimas (stack, dependencias, riesgos, recomendación).
-- Reviewer: revisa que el reporte responde el pedido original y no se haya desviado. 
+- **Explorer**: Mapea la estructura del repositorio, stack tecnológico, dependencias y convenciones de código.
+- **Researcher**: Utiliza el RAG (con documentación indexada de React) y búsquedas web para investigar buenas prácticas y comprobar si las dependencias encontradas están obsoletas, tienen vulnerabilidades (CVEs) o si existen versiones recomendadas estables.
+- **Implementer**: Redacta el reporte final de arquitectura (`ARCHITECTURE_REPORT.md`) con hallazgos y recomendaciones.
+- **Tester**: Valida que el reporte haya sido generado, no esté vacío y contenga las secciones clave de arquitectura.
+- **Reviewer**: Realiza la revisión final del reporte contra la solicitud original del usuario (`original_request`) y dictamina su aprobación o rechazo con justificación. 
 
 ## Criterio de Cumplimiento
 El reporte se considera exitoso si:
@@ -41,5 +39,5 @@ Stack real del proyecto:
 
 Riesgos:
   * Fuga de sesión y datos en caché en el logout. La función dedicada no limpia ni invalida caché global.
-  * Pérdida de Reactividad al leer credenciales alojadas en localstorage.
-  * Fragilidad en el procesameinto de fechas y cálculo de duración.
+  * Pérdida de Reactividad al leer credenciales alojadas en localStorage.
+  * Fragilidad en el procesamiento de fechas y cálculo de duración.

@@ -2,21 +2,24 @@
 
 ## Agente principal
 
-`run_main_agent(repo_url, repo_path, supervision)` es el punto de entrada y el coordinador de toda la ejecución. 
+`run_agent()` es el punto de entrada principal del sistema, implementado como un chat loop interactivo por consola. 
 
 Sus responsabilidades:
-- **Prepara el entorno**: clona el repositorio a analizar (o reutiliza uno ya clonado) y arma el `task_state` inicial con el pedido del usuario.
-- **Consulta la memoria persistente**: si el repo ya fue analizado en una sesión anterior, avisa y reutiliza ese contexto (`PROJECT_MEMORY`).
-- **Orquesta los subagentes en orden fijo**: Explorer → Researcher → Implementer → Tester → Reviewer. No decide dinámicamente el orden ni salta pasos — es una secuencia lineal donde cada subagente recibe el `state` ya enriquecido por los anteriores.
-- **Abre y cierra la traza de Langfuse**: crea un `trace` al inicio y un `span` por subagente, para poder observar la ejecución después.
-- **Actualiza la memoria persistente** al terminar (`update_memory`) y **produce el resumen final** en consola (archivos modificados, fuentes consultadas, cantidad de chunks de RAG usados, veredicto del Reviewer).
-- **Maneja errores globales**: si algo revienta, lo registra en el progreso y en la traza antes de relanzar la excepción, y asegura el `flush()` de Langfuse en un `finally`.
+- **Prepara el entorno**: Al iniciar la sesión, clona el repositorio a analizar (o reutiliza uno ya clonado) a través de `init_repo()`.
+- **Mapeo de comandos interactivos**: Procesa comandos de control y configuración tales como `/help`, `/commands`, `/analyze`, `/plan`, `/supervision`, `/config`, `/status`, `/reset` y `/exit`.
+- **Paso a paso guiado (Plan Mode)**: En caso de estar activo (`plan_mode=True`), genera y propone una lista detallada de pasos a seguir para el prompt ingresado antes de ejecutar herramientas, requiriendo confirmación del usuario (`plan_mode_flow()`).
+- **Enrutamiento selectivo**: 
+  - Si el usuario ejecuta `/analyze`, el prompt se delega al pipeline completo de subagentes (`subagent_pipeline`).
+  - En caso contrario, se responde de manera directa mediante el chat en modo simple usando el loop unificado.
+- **Creación de Trazas e Historial**: Crea y mantiene el `state` (`new_task_state`) compartido y la traza de Langfuse (`react-architecture-agent-chat`) durante toda la sesión interactiva.
+- **Orquestación de Subagentes (`subagent_pipeline`)**: Si se activa el análisis, orquesta a los subagentes en su orden lineal preestablecido (Explorer → Researcher → Implementer → Tester → Reviewer).
+- **Actualización de Memoria y Resumen**: Al finalizar la ejecución del pipeline, actualiza la memoria en disco (`update_memory()`) y genera el resumen con los veredictos en consola.
 
-El agente principal **no ejecuta tools de análisis él mismo** — delega todo el trabajo de exploración, investigación e implementación en los subagentes; su rol es puramente de coordinación y registro.
+El agente principal coordina y expone la interfaz de usuario, delegando las tareas de exploración e implementación profundas al pipeline de subagentes.
 
 ## Subagentes
 
-Cada subagente corre sobre el mismo mecanismo interno (`inner_loop_with_guards`): recibe un objetivo puntual, puede invocar tools (`list_files`, `read_file`, `write_file`, `run_command`, `web_search`, búsqueda en RAG), y su ejecución está sujeta a los guardrails de permisos y a la detección de loops. Lo que diferencia a cada uno es el **objetivo que se le da** y qué hace con el resultado.
+Cada subagente corre sobre el mismo mecanismo unificado de control (`inner_loop_unificado`): recibe su prompt de sistema y un objetivo puntual, e interactúa con las herramientas disponibles bajo supervisión y guardrails estrictos. Lo que diferencia a cada subagente es el **objetivo específico asignado** y los datos que consolida en el estado compartido.
 
 | Subagente | Rol | Qué recibe | Qué produce |
 |---|---|---|---|
@@ -57,11 +60,19 @@ state = {
     "observations": [str, ...],     # notas relevantes que cualquier subagente puede dejar
 
     "rag_chunks_used": [...],       # chunks concretos recuperados del RAG durante la tarea
-
     "tool_call_log": [str, ...]     # historial de llamadas (tool + args) usado exclusivamente
                                      # para detectar loops, no se le muestra al usuario
 }
 ```
+
+## Loop unificado e inner loop
+
+El sistema unifica el comportamiento de ejecución mediante la función `inner_loop_unificado(messages, supervision, state=None, span=None, subagent_name="main")`:
+- **Modo Simple** (cuando `state` es `None`): Se utiliza en el chat directo del agente principal. No realiza detección de loops ni resúmenes automáticos de contexto largo.
+- **Modo con Guards** (cuando se provee `state`): Utilizado por los subagentes. Habilita la detección de loops mediante `detect_loop()`, la reducción de contexto largo (a través de `summarize_history()` al superar `MAX_CONTEXT_TOKENS`) y el logging de progreso en el `state` compartido. Si se pasa un `span`, genera la traza correspondiente en Langfuse.
+
+### Detección de loops mejorada
+El detector de loops (`detect_loop()`) compara la firma de la llamada actual contra `state["tool_call_log"]`. La clave compuesta se genera como `f"{subagent_name}:{tool_name}:{args_json}"`, lo que encapsula el historial por subagente y evita que llamadas repetidas legítimas entre distintos agentes (por ejemplo, `list_files` consecutivas por Explorer y Researcher) sean erróneamente interpretadas como loops infinitos.
 
 Separado del `task_state` (que vive solo durante una ejecución) está `PROJECT_MEMORY`, cargado desde `project_memory.json` y persistido entre sesiones distintas del notebook:
 
