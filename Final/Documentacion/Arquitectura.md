@@ -29,7 +29,11 @@ Cada subagente corre sobre el mismo mecanismo unificado de control (`inner_loop_
 | **Tester** | Valida el resultado con checks definidos (por ejemplo, que el archivo del reporte exista y tenga contenido, o correr algún comando de verificación). | El archivo generado por el Implementer | `state["subagent_results"]["tester"]`: resultado de la validación |
 | **Reviewer** | Revisa el reporte final contra el pedido original (`state["original_request"]`) y da un veredicto. | Todo el `state` acumulado | `state["subagent_results"]["reviewer"]`: veredicto (aprobado/rechazado) y observaciones |
 
-Ningún subagente tiene acceso a exactamente las mismas tools ni a los mismos permisos — por ejemplo, el Explorer no puede escribir archivos aunque la tool `write_file` exista en el sistema, porque su objetivo se lo prohíbe explícitamente y los guardrails validan cada `tool_call` antes de ejecutarla.
+Ningún subagente tiene acceso a exactamente las mismas tools ni a los mismos permisos — por ejemplo, el Explorer no puede escribir archivos aunque la tool `write_file` exista en el sistema. 
+
+Dependiendo de la versión del notebook, esta restricción se implementa de dos formas:
+1. En **[Agente_final.ipynb](file:///C:/Users/laris/Downloads/InteligenciaArtificial/Final/Agente_final.ipynb)**: Se controla a nivel conceptual mediante las instrucciones del sistema (prompt de objetivo) y los guardrails globales (`validate_tool_call`), aunque la interfaz de herramientas expuesta incluye todas las tools registradas.
+2. En **[Agente_final_feedback.ipynb](file:///C:/Users/laris/Downloads/InteligenciaArtificial/Final/Agente_final_feedback.ipynb)**: Se implementa un perfilado programático a través de un mapeo `TOOL_PROFILES` (dentro del código). Este mapeo filtra el esquema de herramientas que ve cada agente en `inner_loop_unificado()` y bloquea de manera estricta cualquier intento de llamada no permitida en `execute_tool()`.
 
 ## Estructura del estado compartido
 

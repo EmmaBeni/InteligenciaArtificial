@@ -16,7 +16,7 @@ Sin embargo, todo corre en Google Colab por lo que no es necesario hacer isntala
 
 ## Instalación
 
-1) Acceder a [Agente_final.ipynb](file:///C:/Users/laris/Downloads/InteligenciaArtificial/Final/Agente_final.ipynb) en Google Colab (o entorno local Jupyter).
+1) Acceder a [Agente_final.ipynb](file:///C:/Users/laris/Downloads/InteligenciaArtificial/Final/Agente_final.ipynb) o a la versión con perfilado de herramientas programático [Agente_final_feedback.ipynb](file:///C:/Users/laris/Downloads/InteligenciaArtificial/Final/Agente_final_feedback.ipynb) en Google Colab (o entorno local Jupyter).
 2) Se cargan las credenciales como Secrets de Colab (o variables de entorno si se corre en local):
 
     - `OPENAI_API_KEY`
